@@ -1,128 +1,252 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Yo-kai Watch Color Calculator</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yw-colour</title>
 <style>
-  body { font-family: sans-serif; padding: 20px; }
-  input, select, textarea, button { margin: 5px 0; font-size: 1rem; }
-  #output { 
-    margin-top: 10px; 
-    font-weight: bold; 
-    font-size: 1.2rem; 
-    display: flex; 
-    align-items: center;
-    gap: 10px;
-  }
-  #previewBox {
-    width: 25px;
-    height: 25px;
-    border-radius: 4px;
-    border: 1px solid #888;
-  }
-  textarea { width: 300px; height: 40px; }
+  /* just bare minimum CSS - I don't feel like CSSing rn :p (No, that isn't a word) */
+  body { font-family: system-ui, sans-serif; margin: 1em; }
+  textarea { width: 100%; min-height: 10em; }
+  button { margin: 0.2em 0; }
+  #preview { border: 1px solid #ccc; padding: 0.5em; min-height: 8em; }
+  .palette button { width: 3.8em; margin: 0.15em; font-size: 0.8em; border: 1px solid #888; border-radius: 4px; cursor: pointer; color: #000; }
 </style>
 </head>
 <body>
 
-<h2>Yo-kai Watch Color Calculator</h2>
+<h1>yw-colour</h1>
+<p>Preview Level-5 colour tags i.e. (<code>&lt;C3&gt;</code>, <code>&lt;CR&gt;</code>, <code>&lt;C#123&gt;</code>, etc.). Matching the exact engine quirks of the YW2 implementation via testing, editing and colour analysis.</p>
 
-<p>Yo-kai Watch supports these formats:</p>
-<ul>
-  <li><code>&lt;C0&gt;</code> to <code>&lt;C30&gt;</code> (fixed color codes)</li>
-  <li><code>&lt;C#RRGGBB&gt;</code> (RGB888)</li>
-  <li><code>&lt;C"RGB776&gt;</code> (7-bit Red, 7-bit Green, 6-bit Blue)</li>
-</ul>
+<h3>Input</h3>
+<textarea id="input">Hello! &lt;CR&gt;Red&lt;/C&gt;, &lt;CG&gt;Green&lt;/C&gt;, &lt;CN&gt;Blue&lt;/C&gt;
+&lt;C#1>single digit&lt;/C&gt;
+&lt;C13&gt;unclosed stays active</textarea>
 
-<label for="colorPicker">Pick a color:</label>
-<input type="color" id="colorPicker" value="#aabbcc">
+<p>
+<button id="renderBtn">Render</button>
+<button id="copyHtml">Copy HTML</button>
+<button id="copyText">Copy Text</button>
+</p>
 
-<div>
-<label for="format">Output format:</label>
-<select id="format">
-  <option value="RGB776">&lt;C"RGB776&gt;</option>
-  <option value="RGB888">&lt;C#RGB888&gt;</option>
-</select>
-</div>
+<h3>Palette</h3>
+<div class="palette" id="palette"></div>
 
-<div>
-<label for="inputText">Or input &lt;C"RGB776&gt;:</label>
-<textarea id="inputText" placeholder='e.g., <C"4EEBF>'></textarea>
-</div>
+<h4>Add custom colour</h4>
+<p>
+  <input type="color" id="customColor" value="#ff0000">
+  <label><input type="checkbox" id="useQuote"> use <code>C"RRGGBB</code> instead of <code>C#RRGGBB</code></label>
+  <button id="addCustom">Insert</button>
+</p>
 
-<button id="encodeBtn">Convert / Encode</button>
-<button id="copyBtn">Copy</button>
-
-<div id="output">
-  <span id="outputText"></span>
-  <div id="previewBox"></div>
-</div>
+<h3>Preview</h3>
+<p id="warning" style="color: darkorange; display: none;"></p>
+<p>
+  Preview background: <input type="color" id="bgPicker" value="#ffffff">
+</p>
+<div id="preview"></div>
 
 <script>
-function rgb888ToRgb776(r, g, b) {
-    let r7 = Math.round(r / 255 * 127);
-    let g7 = Math.round(g / 255 * 127);
-    let b6 = Math.round(b / 255 * 63);
-    let value = (r7 << 13) | (g7 << 6) | b6;
-    return value.toString(16).toUpperCase().padStart(5, '0'); // 5 hex digits
-}
+// create namespaces
+window.level5 = window.level5 || {};
+window.level5.controlCodes = window.level5.controlCodes || {};
+window.level5.controlCodes.colour = window.level5.controlCodes.colour || {};
+window.level5.controlCodes.colour.ui = window.level5.controlCodes.colour.ui || {};
 
-function rgb776ToRgb888(hex776) {
-    let value = parseInt(hex776, 16);
-    let r7 = (value >> 13) & 0x7F;
-    let g7 = (value >> 6) & 0x7F;
-    let b6 = value & 0x3F;
-    let r = Math.round(r7 * 255 / 127);
-    let g = Math.round(g7 * 255 / 127);
-    let b = Math.round(b6 * 255 / 63);
-    return { r, g, b };
-}
+(function (colour, ui) {
+  const GamePalette = {
+    CR:'#C80014', CG:'#328228', CN:'#2850B4',
+    C0:'#00FF00',C1:'#000000',C2:'#FFFFFF',C3:'#C80014',C4:'#C8A014',C5:'#328228',C6:'#2850B4',C7:'#D7B45F',C8:'#E18200',C9:'#A56441',
+    C10:'#808080',C11:'#A0A0A0',C12:'#FF6E6E',C13:'#82AAFA',C14:'#D7FA64',C15:'#000000',C16:'#323232',C17:'#FED200',C18:'#8CFA41',C19:'#FF4646',
+    UNASSIGNED:'#000000'
+  };
+  const indexed = Array.from({ length: 20 }, (_, i) => GamePalette['C' + i]);
 
-function rgbToHex(r, g, b) {
-    return ((1<<24) + (r<<16) + (g<<8) + b).toString(16).slice(1).toUpperCase();
-}
+  // ---------------- Helpers (yay) ----------------
+  const isHex = (s) => /^[0-9A-Fa-f]+$/.test(s);
+  const tryGetIndexed = (i) => ((i >= 0 && i < indexed.length) ? indexed[i] : GamePalette.UNASSIGNED);
+  const esc = (s)  => s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
 
-function updateOutput() {
-    const colorPicker = document.getElementById('colorPicker').value;
-    const inputText = document.getElementById('inputText').value.trim();
-    const format = document.getElementById('format').value;
 
-    let output = '';
-
-    if (/^<C"[0-9A-Fa-f]{5}>$/.test(inputText)) {
-        // Decode RGB776 input
-        let hex776 = inputText.slice(3, -1);
-        let rgb = rgb776ToRgb888(hex776);
-        document.getElementById('colorPicker').value = `#${rgbToHex(rgb.r, rgb.g, rgb.b)}`;
-        output = `<C#${rgbToHex(rgb.r, rgb.g, rgb.b)}>`;
-    } else {
-        // Encode from color picker
-        const r = parseInt(colorPicker.substr(1, 2), 16);
-        const g = parseInt(colorPicker.substr(3, 2), 16);
-        const b = parseInt(colorPicker.substr(5, 2), 16);
-
-        if (format === 'RGB776') {
-            output = `<C"${rgb888ToRgb776(r, g, b)}>`;
-        } else {
-            output = `<C#${colorPicker.substr(1).toUpperCase()}>`;
-        }
+  // Do I need to explain this :p
+  function parseGameColor(tag) {
+    if (!tag) return null;
+    if (tag.startsWith('<') && tag.endsWith('>')) tag = tag.slice(1, -1);
+    if (tag === 'CR' || tag === 'CG' || tag === 'CN') return GamePalette[tag];
+    if (((tag.startsWith('C#') || tag.startsWith('C"')) && tag.length >= 8) && isHex(tag.substr(2, 6))) return '#' + tag.substr(2, 6).toUpperCase();
+    if (tag.startsWith('C#') || tag.startsWith('C"')) {
+      const digits = (tag.substr(2).match(/[0-9A-Fa-f]/g) || []).map(function(c){ return c.toUpperCase(); });
+      if (digits.length === 0) return GamePalette.UNASSIGNED;
+      if (digits.length === 1) return '#' + (digits[0] + '0C0' + digits[0] + '0');
+      const buf = ['0','C','0','C','0','C'];
+      for (let i = 0; i < Math.min(6, digits.length); i++) buf[i] = digits[i];
+      return '#' + buf.join('');
     }
 
-    document.getElementById('outputText').textContent = output;
-    document.getElementById('previewBox').style.backgroundColor = colorPicker;
-}
+    if (tag.startsWith('C') && /^C\d+$/.test(tag)) return tryGetIndexed(parseInt(tag.slice(1), 10));
+    if (tag.startsWith('C')) return GamePalette.UNASSIGNED;
+    return null;
+  }
 
-document.getElementById('encodeBtn').addEventListener('click', updateOutput);
+  // Ze parsing of ze text :p
+  function parseText(str) {
+    let out = '';
+    let i = 0;
+    let unclosed = false;
 
-// Live preview when picking a color
-document.getElementById('colorPicker').addEventListener('input', updateOutput);
+    while (i < str.length) {
+      const open = str.indexOf('<', i);
+      if (open === -1) { out += esc(str.slice(i)); break; }
 
-// Copy button
-document.getElementById('copyBtn').addEventListener('click', () => {
-    const text = document.getElementById('outputText').textContent;
-    if (text) navigator.clipboard.writeText(text);
-});
+      out += esc(str.slice(i, open));
+      const close = str.indexOf('>', open);
+      if (close === -1) { out += esc(str.slice(open)); break; }
+
+      const tag = str.slice(open + 1, close);
+      if (!tag.startsWith('C')) {
+        out += esc(str.slice(open, close + 1));
+        i = close + 1;
+        continue;
+      }
+
+      const color = parseGameColor(tag) || GamePalette.UNASSIGNED;
+
+      // find the matching </C> (handles nesting because level5 does)
+      let depth = 1;
+      let scan = close + 1;
+      let end = -1;
+
+      while (scan < str.length) {
+        const nextOpen = str.indexOf('<C', scan);
+        const nextClose = str.indexOf('</C>', scan);
+
+        if (nextClose === -1) break;
+
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          depth++;
+          scan = nextOpen + 2;
+        } else {
+          depth--;
+          if (depth === 0) { end = nextClose; break; }
+          scan = nextClose + 4;
+        }
+      }
+
+      let inner;
+      if (end === -1) {
+        inner = str.slice(close + 1);
+        i = str.length;
+        unclosed = true;
+      } else {
+        inner = str.slice(close + 1, end);
+        i = end + 4;
+      }
+
+      out += '<span style="color:' + color + '">' + parseText(inner) + '</span>';
+    }
+
+    colour._unclosed = colour._unclosed || unclosed;
+    return out;
+  }
+  colour.GamePalette = GamePalette;
+  colour.parseGameColor = parseGameColor;
+  colour.parseText = parseText;
+  colour.tryGetIndexed = tryGetIndexed;
+  colour.isHex = isHex;
+  colour._unclosed = false;
+
+  // some UI codez
+  ui.insertAtCursor = function (textarea, text, placeBetween) {
+    // places "text" at cursor, and if placeBetween is an object {open:...,close:...} will position caret between
+    const start = textarea.selectionStart || textarea.value.length;
+    const end = textarea.selectionEnd || textarea.value.length;
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+    if (placeBetween) {
+      const full = before + placeBetween.open + placeBetween.close + after;
+      textarea.value = full;
+      const caret = before.length + placeBetween.open.length;
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = caret;
+    } else {
+      const full = before + text + after;
+      textarea.value = full;
+      const caret = before.length + text.length;
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = caret;
+    }
+  };
+
+  ui.setup = function () {
+    const input = document.getElementById('input');
+    const preview = document.getElementById('preview');
+    const warning = document.getElementById('warning');
+    const bgPicker = document.getElementById('bgPicker');
+
+    function render() {
+      colour._unclosed = false;
+      preview.innerHTML = colour.parseText(input.value);
+      preview.style.background = bgPicker.value;
+
+      const warnings = [];
+      if (colour._unclosed) {
+        warnings.push('⚠ Unclosed <C> tag detected: colour remains active and may look bugged on some UIs.');
+      }
+      if (/<\\C>/.test(input.value)) {
+        warnings.push('⚠ Found <\\C> — closing tags must use a forward slash: </C>.');
+      }
+
+      warning.innerHTML = warnings.join('<br>');
+      warning.style.display = warnings.length ? 'block' : 'none';
+    }
+
+    // wire buttons
+    document.getElementById('renderBtn').onclick = render;
+    document.getElementById('copyHtml').onclick = function () { navigator.clipboard.writeText(preview.innerHTML); };
+    document.getElementById('copyText').onclick = function () { navigator.clipboard.writeText(input.value); };
+    bgPicker.addEventListener('input', function () { preview.style.background = bgPicker.value; });
+
+    // build palette and auto-close/insert between
+    const pal = document.getElementById('palette');
+    ['CR','CG','CN'].concat(Array.from({length:20},function(_,i){return 'C'+i;})).forEach(function(k){
+      const b = document.createElement('button');
+      b.textContent = k;
+      b.style.background = GamePalette[k] || '#000';
+      b.onclick = function() {
+        ui.insertAtCursor(input, null, { open: '<' + k + '>', close: '</C>' });
+        render();
+      };
+      pal.appendChild(b);
+    });
+
+    // custom colour insert
+    const customColor = document.getElementById('customColor');
+    const useQuote = document.getElementById('useQuote');
+    document.getElementById('addCustom').onclick = function () {
+      const hex = customColor.value.replace('#','').toUpperCase();
+      const prefix = useQuote.checked ? 'C"' : 'C#';
+      ui.insertAtCursor(input, null, { open: '<' + prefix + hex + '>', close: '</C>' });
+      render();
+    };
+
+    // initial render
+    render();
+  };
+
+  // attach ui.setup for external call and run now
+  ui.setup();
+
+})(window.level5.controlCodes.colour, window.level5.controlCodes.colour.ui);
+
+// basic sanity tests because I made alot of quick patches to this
+console.assert(window.level5.controlCodes.colour.parseText('<C#1>TX<C#FF1>Z</C></C>').includes('TX') && window.level5.controlCodes.colour.parseText('<C#1>TX<C#FF1>Z</C></C>').includes('Z'), 'nested colour tags');
+console.assert(window.level5.controlCodes.colour.parseGameColor('CR') === '#C80014', 'CR check');
+console.assert(window.level5.controlCodes.colour.parseGameColor('C#1') === '#10C010', 'C#1 packing');
+console.assert(window.level5.controlCodes.colour.parseText('<C3>x</C>').indexOf('<span') !== -1, 'parseText produces span');
 </script>
-
 </body>
 </html>
