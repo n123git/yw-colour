@@ -1,5 +1,6 @@
-# yw-color
-YW has the following color code formats: &lt;C0> to &lt;C30> and &lt;CR>, &lt;CG> and &lt;CN> of fixed color codes, &lt;C#RGB888>, &lt;C"RGB776>. This lets you convert between and select them easily!
-
-Example:
-<C#123456>HI</C> colors the text "HI" with #123456
+# yw-colour
+Yo-kai Watch uses a special control code format for text - this tool handles Colouring Appearence control codes, it does NOT handle:
+* Actor Control Codes
+* Game Variable control codes
+* Glyphs
+This attempts to mimic the exact quirks, feature-set and implementation of the Yo-kai Watch 2 format, down to everye edge case. Made for `yw-mod`
