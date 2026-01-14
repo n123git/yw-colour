@@ -16,7 +16,7 @@
 <body>
 
 <h1>yw-colour</h1>
-<p>Preview Level-5 colour tags i.e. (<code>&lt;C3&gt;</code>, <code>&lt;CR&gt;</code>, <code>&lt;C#123&gt;</code>, etc.). Matching the exact engine quirks of the YW2 implementation via testing, editing and colour analysis.</p>
+<p>Preview Level-5 colour tags i.e. (<code>&lt;C3&gt;</code>, <code>&lt;CR&gt;</code>, <code>&lt;C#123&gt;</code>, etc.). Hopefully matches the exact engine quirks of the YW2 implementation - made via testing, injecting unescaped string blobs and colour analysis.</p>
 
 <h3>Input</h3>
 <textarea id="input">Hello! &lt;CR&gt;Red&lt;/C&gt;, &lt;CG&gt;Green&lt;/C&gt;, &lt;CN&gt;Blue&lt;/C&gt;
@@ -253,4 +253,5 @@ console.assert(window.level5.controlCodes.colour.parseText('<C3>x</C>').indexOf(
 </script>
 </body>
 </html>
+
 
